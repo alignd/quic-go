@@ -2,6 +2,7 @@ package chrome_test
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/lucas-clemente/quic-go/integrationtests/tools/testserver"
 	"github.com/lucas-clemente/quic-go/internal/protocol"
@@ -14,6 +15,12 @@ var _ = Describe("Chrome tests", func() {
 		version := protocol.SupportedVersions[i]
 
 		Context(fmt.Sprintf("with version %s", version), func() {
+			BeforeEach(func() {
+				if os.Getenv("TRAVIS") == "true" && version == protocol.Version42 {
+					Skip("Chrome on Travis doesn't yet support QUIC 42. See #1378.")
+				}
+			})
+
 			JustBeforeEach(func() {
 				testserver.StartQuicServer([]protocol.VersionNumber{version})
 			})
