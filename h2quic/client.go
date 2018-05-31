@@ -45,6 +45,7 @@ type client struct {
 	headerErrored chan struct{} // this channel is closed if an error occurs on the header stream
 	requestWriter *requestWriter
 
+	// Responses pending header receipt.
 	responses map[protocol.StreamID]chan *http.Response
 
 	logger utils.Logger
@@ -191,35 +192,25 @@ func (c *client) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	resc := make(chan error, 1)
+	// This will write the request body in a separate goroutine.
 	if hasBody {
 		go func() {
-			resc <- c.writeRequestBody(dataStream, req.Body)
+			c.writeRequestBody(dataStream, req.Body)
 		}()
 	}
 
 	var res *http.Response
 
 	var receivedResponse bool
-	var bodySent bool
-
-	if !hasBody {
-		bodySent = true
-	}
 
 	ctx := req.Context()
-	for !(bodySent && receivedResponse) {
+	for !(receivedResponse) {
 		select {
 		case res = <-responseChan:
 			receivedResponse = true
 			c.mutex.Lock()
 			delete(c.responses, dataStream.StreamID())
 			c.mutex.Unlock()
-		case err := <-resc:
-			bodySent = true
-			if err != nil {
-				return nil, err
-			}
 		case <-ctx.Done():
 			// error code 6 signals that stream was canceled
 			dataStream.CancelRead(6)
