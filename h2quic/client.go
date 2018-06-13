@@ -189,23 +189,17 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	resc := make(chan error, 1)
 	if hasBody {
 		go func() {
-			resc <- c.writeRequestBody(dataStream, req.Body)
+			c.writeRequestBody(dataStream, req.Body)
 		}()
 	}
 
 	var res *http.Response
 
 	var receivedResponse bool
-	var bodySent bool
 
-	if !hasBody {
-		bodySent = true
-	}
-
-	for !(bodySent && receivedResponse) {
+	for !(receivedResponse) {
 		select {
 		case res = <-hdrChan:
 			receivedResponse = true
@@ -215,11 +209,6 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 			if res == nil { // an error occured on the header stream
 				c.Close(c.headerErr)
 				return nil, c.headerErr
-			}
-		case err := <-resc:
-			bodySent = true
-			if err != nil {
-				return nil, err
 			}
 		}
 	}
